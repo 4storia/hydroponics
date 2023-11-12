@@ -5,10 +5,22 @@ const {
     wrapMessageForChild
 } = require('./message-generator');
 
+const DEBUG_MODE = !!process.env.DEBUG_MODE;
+
 class PowerStrip {
     constructor(host) {
         this.host = host;
         this.messageClient = new TPLinkMessageClient(host);
+        this.plugNames = {};
+        this.db = null;
+    }
+
+    setPlugName (plugNumber, name) {
+        this.plugNames[plugNumber] = name;
+    }
+
+    connectFilestore (filestoreInstance) {
+        this.db = filestoreInstance;
     }
 
     async connect() {
@@ -20,9 +32,14 @@ class PowerStrip {
 
     async sendMessageToChild(childId, message) {
         const formattedMessage = wrapMessageForChild(childId, message);
-        const response = await this.messageClient.sendMessage(formattedMessage);
 
-        return response;
+        if(!DEBUG_MODE) {
+            const response = await this.messageClient.sendMessage(formattedMessage);
+
+            return response;
+        } else {
+            console.log('[DEBUG]', formattedMessage);
+        }
     }
 
     async setPowerForPlug(plugNumber, powerOnOrOff) {
@@ -32,6 +49,8 @@ class PowerStrip {
 
         const childId = this.children[plugIndex].id;
         const powerMessage = generatePowerToggleMessage(powerOnOrOff);
+
+        this.recordStateChange(plugNumber, 'POWER', powerOnOrOff);
 
         return this.sendMessageToChild(childId, powerMessage);
     }
@@ -43,69 +62,12 @@ class PowerStrip {
 
         return this.children[plugIndex].state;
     }
+
+    recordStateChange(plugNumber, changeType, value) {
+        if(!this.db) return;
+
+        this.db.write(`lastInstructions.${plugNumber}.${changeType}`, value);
+    }
 }
 
 module.exports = PowerStrip;
-
-
-
-
-
-
-
-
-
-
-
-// class PowerStripPlug {
-//     constructor(id, alias, deviceRef) {
-//         this.id = id;
-//         this.alias = alias;
-
-//         // Temporary, get rid of this shit with the library
-//         this.deviceRef = deviceRef;
-//     }
-
-//     async on() {
-//         const message = {
-//             system: {
-//                 set_relay_state: {
-//                     state: 1
-//                 }
-//             }
-//         };
-
-//         return this.sendMessage(message);
-//     }
-
-//     async off() {
-        // const message = {
-        //     system: {
-        //         set_relay_state: {
-        //             state: 0
-        //         }
-        //     }
-        // };
-
-//         return this.sendMessage(message);
-//     }
-
-//     async sendMessage(message) {
-//         const formattedMessage = {
-//             context: {
-//                 child_ids: [this.id]
-//             },
-//             ...message
-//         };
-
-//         try {
-//             const messageString = JSON.stringify(formattedMessage);
-//             console.log("?", messageString)
-//             const response = await this.deviceRef.send(messageString);
-//             return response;
-//         } catch(err) {
-//             console.error(err);
-//         }
-
-//     }
-// }
