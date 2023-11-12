@@ -58,6 +58,7 @@ function manageWater(powerStrip) {
         console.log(`[ ${formattedDate} ]: ON - Water pump`);
         powerStrip.setPowerForPlug(WATER_PUMP_PLUG, 1);
         setTimeout(() => {
+            const { formattedDate } = getTimeOfDayHelpers();
             console.log(`[ ${formattedDate} ]: OFF - Water pump`);
             powerStrip.setPowerForPlug(WATER_PUMP_PLUG, 0);
         }, THIRTY_SECONDS);
