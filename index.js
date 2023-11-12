@@ -1,6 +1,7 @@
 const PowerStrip = require('./tp-link/power-strip');
+const { attachExitCallback } = require('./utils/node-consistent-exit');
 
-const POWER_STRIP_HOST = '192.168.50.245';
+const POWER_STRIP_HOST = '192.168.50.254';
 const MAIN_PLANTS_UV_LIGHT_PLUG = 3;
 const WATER_PUMP_PLUG = 2;
 
@@ -18,41 +19,40 @@ async function controlPower() {
 
     manageLights(powerStrip);
     manageWater(powerStrip);
+    attachExitCallback(async () => {
+        await emergencyShutdown(powerStrip);
+    });
 }
 
-function isSunUp() {
+function getTimeOfDayHelpers() {
     const now = new Date();
     const currentHour = now.getHours();
-    const dayTime = currentHour >= 9 && currentHour < 23;
+    const currentMinutes = now.getMinutes();
+    const formattedDate = `${now.toLocaleDateString('en-US')} ${now.toLocaleTimeString('en-US')}`;
 
-    return dayTime;
+    const isSunUp = currentHour >= 9 && currentHour < 23;
+
+    return { now, currentHour, currentMinutes, formattedDate, isSunUp };
 }
 
 function manageLights(powerStrip) {
-    const now = new Date();
-    const currentHour = now.getHours();
-    const dayTime = currentHour >= 9 && currentHour < 23;
-
-    const formattedDate = `${now.toLocaleDateString('en-US')} ${now.toLocaleTimeString('en-US')}`;
+    const { isSunUp, formattedDate } = getTimeOfDayHelpers();
 
     // Main UV Light
-    if(dayTime && powerStrip.getPowerStatusForPlug(MAIN_PLANTS_UV_LIGHT_PLUG) === 0) {
+    if(isSunUp && powerStrip.getPowerStatusForPlug(MAIN_PLANTS_UV_LIGHT_PLUG) === 0) {
         console.log(`[ ${formattedDate} ]: ON - Main UV lighting`);
         powerStrip.setPowerForPlug(MAIN_PLANTS_UV_LIGHT_PLUG, 1)
-    } else if(!dayTime && powerStrip.getPowerStatusForPlug(MAIN_PLANTS_UV_LIGHT_PLUG) === 1) {
+    } else if(!isSunUp && powerStrip.getPowerStatusForPlug(MAIN_PLANTS_UV_LIGHT_PLUG) === 1) {
         console.log(`[ ${formattedDate} ]: OFF - Main UV lighting`);
         powerStrip.setPowerForPlug(MAIN_PLANTS_UV_LIGHT_PLUG, 0)
     }
 }
 
 function manageWater(powerStrip) {
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinutes = now.getMinutes();
-    const formattedDate = `${now.toLocaleDateString('en-US')} ${now.toLocaleTimeString('en-US')}`;
+    const { isSunUp, formattedDate } = getTimeOfDayHelpers();
 
     const isWaterAlreadyOn = powerStrip.getPowerStatusForPlug(WATER_PUMP_PLUG) === 1;
-    const shouldTurnOnWater = !isWaterAlreadyOn && isSunUp();
+    const shouldTurnOnWater = !isWaterAlreadyOn && isSunUp;
 
     if(shouldTurnOnWater) {
         console.log(`[ ${formattedDate} ]: ON - Water pump`);
@@ -65,6 +65,13 @@ function manageWater(powerStrip) {
         console.log(`[ ${formattedDate} ]: OFF - Water pump`);
         powerStrip.setPowerForPlug(WATER_PUMP_PLUG, 0)
     }
+}
+
+async function emergencyShutdown(powerStrip) {
+    const { formattedDate } = getTimeOfDayHelpers();
+    console.log(`[ ${formattedDate} ]: EMERGENCY SHUTDOWN, Water OFF`);
+
+    await powerStrip.setPowerForPlug(WATER_PUMP_PLUG, 0);
 }
 
 async function orchestrate() {
