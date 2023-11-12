@@ -43,8 +43,6 @@ class PowerStrip {
 
         return this.children[plugIndex].state;
     }
-
-
 }
 
 module.exports = PowerStrip;
