@@ -8,18 +8,23 @@ const UV_LIGHT_PLUG = 3;
 
 const FIFTEEN_MINUTES = 1000 * 60 * 15;
 const FIVE_MINUTES = 1000 * 60 * 5;
-const FOURTY_FIVE_SECONDS = 1000 * 45;
+const FOURTY_SECONDS = 1000 * 40;
 
 let HAS_ATTACHED_EXIT_CALLBACK = false;
 
 async function timeLoop() {
-    await controlPower();
+    try {
+        await controlPower();
+    } catch(err) {
+        const { formattedDate } = getTimeOfDayHelpers();
+        console.error(`[ ${formattedDate} ] Time Loop Error:`, err);
+    }
 }
 
 async function controlPower() {
     const powerStrip = new PowerStrip(POWER_STRIP_HOST);
-    const filestoredb = new Filestore();
-    powerStrip.connectFilestore(filestoredb);
+    // const filestoredb = new Filestore();
+    // powerStrip.connectFilestore(filestoredb);
 
     await powerStrip.connect();
 
@@ -74,7 +79,7 @@ function manageWater(powerStrip) {
             const { formattedDate } = getTimeOfDayHelpers();
             console.log(`[ ${formattedDate} ]: OFF - Water pump`);
             powerStrip.setPowerForPlug(WATER_PUMP_PLUG, 0);
-        }, FOURTY_FIVE_SECONDS);
+        }, FOURTY_SECONDS);
     } else {
         console.log(`[ ${formattedDate} ]: OFF - Water pump`);
         powerStrip.setPowerForPlug(WATER_PUMP_PLUG, 0)
