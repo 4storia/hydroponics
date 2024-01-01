@@ -1,3 +1,5 @@
+const { networkInterfaces } = require('os');
+
 const PowerStrip = require('./tp-link/power-strip');
 const Filestore = require('./filestore-db');
 const { attachExitCallback } = require('./utils/node-consistent-exit');
@@ -8,7 +10,6 @@ const UV_LIGHT_PLUG = 3;
 
 const FIFTEEN_MINUTES = 1000 * 60 * 15;
 const FIVE_MINUTES = 1000 * 60 * 5;
-const FOURTY_SECONDS = 1000 * 40;
 
 let HAS_ATTACHED_EXIT_CALLBACK = false;
 
@@ -79,7 +80,7 @@ function manageWater(powerStrip) {
             const { formattedDate } = getTimeOfDayHelpers();
             console.log(`[ ${formattedDate} ]: OFF - Water pump`);
             powerStrip.setPowerForPlug(WATER_PUMP_PLUG, 0);
-        }, FOURTY_SECONDS);
+        }, FIVE_MINUTES);
     } else {
         console.log(`[ ${formattedDate} ]: OFF - Water pump`);
         powerStrip.setPowerForPlug(WATER_PUMP_PLUG, 0)
@@ -93,7 +94,55 @@ async function emergencyShutdown(powerStrip) {
     await powerStrip.setPowerForPlug(WATER_PUMP_PLUG, 0);
 }
 
+function isInternetConnected() {
+    const interfaces = networkInterfaces();
+    if(interfaces.en0 || interfaces.wlan0 || interfaces.eth0) return true;
+
+    return false
+}
+
+async function waitForInternet() {
+    let resolve;
+    let reject;
+
+    const promise = new Promise((_resolve, _reject) => {
+        resolve = _resolve;
+        reject = _reject;
+    });
+
+    if(isInternetConnected()) {
+        resolve();
+    } else {
+        let count = 0;
+        const int = setInterval(() => {
+            count++;
+
+            if(count > 30) {
+                clearInterval(int);
+                reject();
+                return;
+            }
+
+            if(isInternetConnected()) {
+                clearInterval(int);
+                resolve();
+            }
+        }, 1000);
+    }
+
+    return promise;
+}
+
 async function orchestrate() {
+    try {
+        await waitForInternet();
+    } catch(err) {
+        const { formattedDate } = getTimeOfDayHelpers();
+
+        console.error(`[ ${formattedDate} ] Unable to connect to internet:`);
+        return process.exit(1);
+    }
+
     await timeLoop();
     const runningInterval = setInterval(timeLoop, FIFTEEN_MINUTES);
 }
